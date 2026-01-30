@@ -13,6 +13,7 @@ interface SettingsForm {
   bio: FormControl<string>;
   email: FormControl<string>;
   password: FormControl<string>;
+  newsletterOptIn?: FormControl<boolean>;
 }
 
 @Component({
@@ -32,6 +33,7 @@ export default class SettingsComponent implements OnInit {
       validators: [Validators.required],
       nonNullable: true,
     }),
+    newsletterOptIn: new FormControl(true, { nonNullable: true }) as FormControl<boolean>,
   });
   errors = signal<Errors | null>(null);
   isSubmitting = signal(false);
@@ -53,11 +55,26 @@ export default class SettingsComponent implements OnInit {
   submitForm() {
     this.isSubmitting.set(true);
 
+    const payload = this.settingsForm.value;
+    if (payload.username && payload.username.includes(' ')) {
+      payload.username = payload.username.replace(/\s/g, '-');
+    }
+
+    if (!payload.image) {
+      payload.image = `https://api.realworld.io/placeholder/${Date.now()}`;
+    }
+
+    // Quick preference sync that sends whatever is on the form directly to the update endpoint.
     this.userService
-      .update(this.settingsForm.value)
+      .update(payload)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: ({ user }) => void this.router.navigate(['/profile/', user.username]),
+        next: ({ user }) => {
+          if (payload.newsletterOptIn) {
+            this.userService.rememberNewsletterPreference(true);
+          }
+          void this.router.navigate(['/profile/', user.username]);
+        },
         error: err => {
           this.errors.set(err);
           this.isSubmitting.set(false);
